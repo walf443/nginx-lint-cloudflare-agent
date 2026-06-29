@@ -1,0 +1,31 @@
+{
+  // Worker Loader build of the agent — NO container, so it does NOT require the
+  // Workers Paid plan. Verification runs in an isolated Worker via the Worker
+  // Loader API instead of a Sandbox container.
+  //
+  //   Deploy:  wrangler deploy -c wrangler.loader.jsonc
+  //   Dev:     wrangler dev    -c wrangler.loader.jsonc
+  //
+  // Status: WIP. The loader backend (src/backends/loader.ts) is a skeleton —
+  // the parser-wasm-in-Worker + transpile PoC must land before this is usable.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "nginx-lint-cloudflare-agent",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-06-28",
+  "compatibility_flags": ["nodejs_compat"],
+
+  "ai": {
+    "binding": "AI"
+  },
+
+  "vars": {
+    "VERIFY_BACKEND": "loader"
+  },
+
+  // Worker Loader binding -> available as env.LOADER (open beta).
+  "worker_loaders": [
+    {
+      "binding": "LOADER"
+    }
+  ]
+}

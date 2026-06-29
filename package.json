@@ -7,6 +7,8 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
+    "dev:loader": "wrangler dev -c wrangler.loader.jsonc",
+    "deploy:loader": "wrangler deploy -c wrangler.loader.jsonc",
     "typecheck": "tsc --noEmit",
     "cf-typegen": "wrangler types"
   },
