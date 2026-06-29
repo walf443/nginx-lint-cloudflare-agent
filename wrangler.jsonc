@@ -21,7 +21,7 @@
       "image": "./Dockerfile",
       "name": "sandbox",
       "max_instances": 1,
-      "instance_type": "standard"
+      "instance_type": "standard-1"
     }
   ],
 
