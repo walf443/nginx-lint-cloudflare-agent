@@ -38,7 +38,12 @@ interface SubmittedPlugin {
 async function authorPlugin(
   rule: string,
   env: Env,
-): Promise<{ summary: string; attempts: number; last: SubmittedPlugin | null }> {
+): Promise<{
+  summary: string;
+  attempts: number;
+  last: SubmittedPlugin | null;
+  debug: unknown;
+}> {
   const workersai = createWorkersAI({ binding: env.AI });
 
   let attempts = 0;
@@ -49,6 +54,10 @@ async function authorPlugin(
     system: SYSTEM_PROMPT,
     prompt:
       `Write an nginx-lint plugin for this rule and verify it passes:\n\n${rule}`,
+    // GPT-OSS is a reasoning model and spends many tokens thinking before it
+    // emits text/tool calls. Without a generous cap the response is truncated
+    // (finishReason "length") with zero visible output.
+    maxOutputTokens: 16000,
     stopWhen: stepCountIs(MAX_STEPS),
     tools: {
       build_and_test: tool({
@@ -86,7 +95,16 @@ async function authorPlugin(
     },
   });
 
-  return { summary: result.text, attempts, last };
+  // Diagnostics: surface why the model may have produced nothing.
+  const debug = {
+    finishReason: result.finishReason,
+    steps: result.steps.length,
+    warnings: result.warnings ?? [],
+    textLength: result.text.length,
+  };
+  console.log("authorPlugin result:", JSON.stringify(debug, null, 2));
+
+  return { summary: result.text, attempts, last, debug };
 }
 
 export default {
@@ -110,16 +128,25 @@ export default {
       );
     }
 
-    const { summary, attempts, last } = await authorPlugin(rule, env);
+    try {
+      const { summary, attempts, last, debug } = await authorPlugin(rule, env);
 
-    return Response.json({
-      ok: last?.result.success ?? false,
-      attempts,
-      summary,
-      plugin: last
-        ? { name: last.pluginName, pluginTs: last.pluginTs, testTs: last.testTs }
-        : null,
-      result: last?.result ?? null,
-    });
+      return Response.json({
+        ok: last?.result.success ?? false,
+        attempts,
+        summary,
+        debug,
+        plugin: last
+          ? { name: last.pluginName, pluginTs: last.pluginTs, testTs: last.testTs }
+          : null,
+        result: last?.result ?? null,
+      });
+    } catch (e) {
+      console.error("authorPlugin threw:", e);
+      return Response.json(
+        { ok: false, error: `agent error: ${(e as Error).message}`, stack: (e as Error).stack },
+        { status: 500 },
+      );
+    }
   },
 } satisfies ExportedHandler<Env>;
