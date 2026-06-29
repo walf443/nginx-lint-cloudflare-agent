@@ -14,6 +14,11 @@ import { generateText, stepCountIs, tool } from "ai";
 import { createWorkersAI } from "workers-ai-provider";
 import { z } from "zod";
 import { SYSTEM_PROMPT } from "./prompt.js";
+import {
+  type ConfigSample,
+  checkConfigs,
+  SAMPLE_CONFIGS,
+} from "./checker.js";
 import { packageJson, TSCONFIG } from "./scaffold.js";
 import { UI_HTML } from "./ui.js";
 import { verifyPlugin, type VerifyResult } from "./verify.js";
@@ -123,37 +128,110 @@ export default {
       );
     }
 
-    let rule: string;
-    try {
-      const body = (await request.json()) as { rule?: string };
-      if (!body.rule) throw new Error("missing 'rule'");
-      rule = body.rule;
-    } catch (e) {
-      return Response.json(
-        { ok: false, error: `bad request: ${(e as Error).message}` },
-        { status: 400 },
-      );
-    }
-
-    try {
-      const { summary, attempts, last, debug } = await authorPlugin(rule, env);
-
-      return Response.json({
-        ok: last?.result.success ?? false,
-        attempts,
-        summary,
-        debug,
-        plugin: last
-          ? { name: last.pluginName, pluginTs: last.pluginTs, testTs: last.testTs }
-          : null,
-        result: last?.result ?? null,
-      });
-    } catch (e) {
-      console.error("authorPlugin threw:", e);
-      return Response.json(
-        { ok: false, error: `agent error: ${(e as Error).message}`, stack: (e as Error).stack },
-        { status: 500 },
-      );
-    }
+    const path = new URL(request.url).pathname;
+    if (path === "/check") return handleCheck(request, env);
+    return handleGenerate(request, env);
   },
 } satisfies ExportedHandler<Env>;
+
+// POST / — author a plugin from a rule description, then run it over a spread
+// of sample configs so the response shows how it behaves on real configs.
+async function handleGenerate(request: Request, env: Env): Promise<Response> {
+  let rule: string;
+  try {
+    const body = (await request.json()) as { rule?: string };
+    if (!body.rule) throw new Error("missing 'rule'");
+    rule = body.rule;
+  } catch (e) {
+    return Response.json(
+      { ok: false, error: `bad request: ${(e as Error).message}` },
+      { status: 400 },
+    );
+  }
+
+  try {
+    const { summary, attempts, last, debug } = await authorPlugin(rule, env);
+
+    // Behavior smoke test against the built-in corpus (best-effort).
+    let patternChecks = null;
+    if (last) {
+      try {
+        const checked = await checkConfigs(env, {
+          pluginName: last.pluginName,
+          pluginTs: last.pluginTs,
+          configs: SAMPLE_CONFIGS,
+        });
+        patternChecks = checked.error
+          ? { error: checked.error, raw: checked.raw }
+          : checked.results;
+      } catch (e) {
+        patternChecks = { error: `pattern check failed: ${(e as Error).message}` };
+      }
+    }
+
+    return Response.json({
+      ok: last?.result.success ?? false,
+      attempts,
+      summary,
+      debug,
+      plugin: last
+        ? { name: last.pluginName, pluginTs: last.pluginTs, testTs: last.testTs }
+        : null,
+      result: last?.result ?? null,
+      patternChecks,
+    });
+  } catch (e) {
+    console.error("authorPlugin threw:", e);
+    return Response.json(
+      { ok: false, error: `agent error: ${(e as Error).message}`, stack: (e as Error).stack },
+      { status: 500 },
+    );
+  }
+}
+
+// POST /check — run an already-generated plugin against caller-supplied configs.
+// Body: { pluginName, pluginTs, config? : string, configs? : ConfigSample[] }
+async function handleCheck(request: Request, env: Env): Promise<Response> {
+  let pluginName: string;
+  let pluginTs: string;
+  let configs: ConfigSample[];
+  try {
+    const body = (await request.json()) as {
+      pluginName?: string;
+      pluginTs?: string;
+      config?: string;
+      configs?: ConfigSample[];
+    };
+    if (!body.pluginName || !body.pluginTs) {
+      throw new Error("missing 'pluginName' or 'pluginTs'");
+    }
+    configs = body.configs
+      ?? (body.config != null
+        ? [{ name: "your config", content: body.config }]
+        : []);
+    if (configs.length === 0) throw new Error("missing 'config' or 'configs'");
+    pluginName = body.pluginName;
+    pluginTs = body.pluginTs;
+  } catch (e) {
+    return Response.json(
+      { ok: false, error: `bad request: ${(e as Error).message}` },
+      { status: 400 },
+    );
+  }
+
+  try {
+    const checked = await checkConfigs(env, { pluginName, pluginTs, configs });
+    return Response.json(
+      checked.error
+        ? { ok: false, error: checked.error, raw: checked.raw }
+        : { ok: true, results: checked.results },
+      { status: checked.error ? 500 : 200 },
+    );
+  } catch (e) {
+    console.error("checkConfigs threw:", e);
+    return Response.json(
+      { ok: false, error: `check error: ${(e as Error).message}` },
+      { status: 500 },
+    );
+  }
+}

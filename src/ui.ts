@@ -43,8 +43,26 @@ export const UI_HTML = /* html */ `<!doctype html>
     font: 13px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace;
     white-space: pre-wrap; word-break: break-word;
   }
-  .spinner { display: none; }
+  .spinner, .spinner2 { display: none; }
   .loading .spinner { display: inline; }
+  .checking .spinner2 { display: inline; }
+  .checks { margin-top: 1rem; }
+  .checks h3 { font-size: 1rem; margin: 0 0 .5rem; }
+  .check {
+    border: 1px solid #8883; border-radius: 8px; padding: .55rem .75rem;
+    margin-bottom: .5rem;
+  }
+  .check .head { display: flex; gap: .5rem; align-items: baseline; }
+  .check .name { font-weight: 600; }
+  .check .count { font-size: .8rem; padding: .05rem .5rem; border-radius: 999px; background: #8882; }
+  .check .count.hit { background: #f59e0b33; }
+  .check .count.crash { background: #dc262633; }
+  .check ul { margin: .4rem 0 0; padding-left: 1.2rem; font-size: .85rem; }
+  .check li { font-family: ui-monospace, Menlo, monospace; }
+  .check .sev-error { color: #dc2626; }
+  .check .sev-warning { color: #d97706; }
+  .playground { margin-top: 2rem; border-top: 1px solid #8883; padding-top: 1.25rem; display: none; }
+  .playground.show { display: block; }
 </style>
 </head>
 <body>
@@ -69,6 +87,21 @@ export const UI_HTML = /* html */ `<!doctype html>
 
   <div id="output"></div>
 
+  <section class="playground" id="playground">
+    <h2 style="font-size:1.15rem;">Try it on your own config</h2>
+    <p class="sub">Paste an nginx config and run the generated plugin against it.</p>
+    <label for="userconf">nginx config</label>
+    <textarea id="userconf" placeholder="events {}
+http {
+    server { server_tokens on; }
+}"></textarea>
+    <div class="row">
+      <button id="runcheck">Run check</button>
+      <span class="spinner2">⏳ running…</span>
+    </div>
+    <div id="checkout"></div>
+  </section>
+
 <script>
 const $ = (s) => document.querySelector(s);
 const ruleEl = $("#rule");
@@ -84,6 +117,31 @@ const esc = (s) => String(s).replace(/[&<>]/g, (c) =>
 function block(title, body) {
   if (body == null || body === "") return "";
   return \`<details><summary>\${esc(title)}</summary><pre>\${esc(body)}</pre></details>\`;
+}
+
+let lastPlugin = null; // { name, pluginTs } of the most recent generation
+
+// Render an array of per-config check results (from /check or patternChecks).
+function renderChecks(results, title) {
+  if (!Array.isArray(results)) {
+    return block(title || "Config checks", results && results.error
+      ? results.error + (results.raw ? "\\n\\n" + results.raw : "")
+      : JSON.stringify(results, null, 2));
+  }
+  const items = results.map((r) => {
+    const cls = !r.ok ? "crash" : r.errorCount > 0 ? "hit" : "";
+    const badge = !r.ok ? "crashed" : r.errorCount + " issue" + (r.errorCount === 1 ? "" : "s");
+    const errs = !r.ok
+      ? \`<ul><li class="sev-error">\${esc(r.error || "threw")}</li></ul>\`
+      : r.errors && r.errors.length
+        ? "<ul>" + r.errors.map((e) =>
+            \`<li class="sev-\${esc(e.severity)}">L\${e.line}:\${e.column} [\${esc(e.severity)}] \${esc(e.message)}\${e.fixCount ? " (fix)" : ""}</li>\`
+          ).join("") + "</ul>"
+        : "";
+    return \`<div class="check"><div class="head"><span class="name">\${esc(r.name)}</span>\` +
+      \`<span class="count \${cls}">\${esc(badge)}</span></div>\${errs}</div>\`;
+  }).join("");
+  return \`<div class="checks"><h3>\${esc(title || "Config checks")}</h3>\${items}</div>\`;
 }
 
 async function run() {
@@ -112,6 +170,7 @@ async function run() {
     const r = data.result || {};
     out.innerHTML =
       \`<div class="status">\${status}</div>\` +
+      (data.patternChecks ? renderChecks(data.patternChecks, "Behavior on sample configs") : "") +
       block("Summary", data.summary) +
       (data.plugin ? block("src/plugin.ts", data.plugin.pluginTs) : "") +
       (data.plugin ? block("src/plugin.test.ts", data.plugin.testTs) : "") +
@@ -119,6 +178,12 @@ async function run() {
       block("stderr", r.stderr) +
       block("debug", data.debug ? JSON.stringify(data.debug, null, 2) : "") +
       (data.stack ? block("stack", data.stack) : "");
+
+    // Enable the playground once we have a usable plugin.
+    if (data.plugin) {
+      lastPlugin = { name: data.plugin.name, pluginTs: data.plugin.pluginTs };
+      $("#playground").classList.add("show");
+    }
   } catch (e) {
     out.innerHTML = \`<div class="status fail">Request failed: \${esc(e.message)}</div>\`;
   } finally {
@@ -127,9 +192,46 @@ async function run() {
   }
 }
 
+async function runCheck() {
+  if (!lastPlugin) return;
+  const config = $("#userconf").value;
+  if (!config.trim()) { $("#userconf").focus(); return; }
+
+  const checkout = $("#checkout");
+  document.body.classList.add("checking");
+  $("#runcheck").disabled = true;
+  checkout.innerHTML = "";
+
+  try {
+    const res = await fetch("/check", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        pluginName: lastPlugin.name,
+        pluginTs: lastPlugin.pluginTs,
+        config,
+      }),
+    });
+    const data = await res.json();
+    checkout.innerHTML = data.ok
+      ? renderChecks(data.results, "Result")
+      : \`<div class="status fail">\${esc(data.error || "check failed")}</div>\` +
+        block("output", data.raw);
+  } catch (e) {
+    checkout.innerHTML = \`<div class="status fail">Request failed: \${esc(e.message)}</div>\`;
+  } finally {
+    document.body.classList.remove("checking");
+    $("#runcheck").disabled = false;
+  }
+}
+
 $("#submit").addEventListener("click", run);
 ruleEl.addEventListener("keydown", (e) => {
   if ((e.metaKey || e.ctrlKey) && e.key === "Enter") run();
+});
+$("#runcheck").addEventListener("click", runCheck);
+$("#userconf").addEventListener("keydown", (e) => {
+  if ((e.metaKey || e.ctrlKey) && e.key === "Enter") runCheck();
 });
 </script>
 </body>
