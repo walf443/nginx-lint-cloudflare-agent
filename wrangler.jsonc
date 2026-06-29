@@ -1,0 +1,44 @@
+{
+  // Cloudflare Worker config.
+  // Docs: https://developers.cloudflare.com/sandbox/  https://developers.cloudflare.com/workers-ai/
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "nginx-lint-cloudflare-agent",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-06-28",
+  "compatibility_flags": ["nodejs_compat"],
+
+  // Workers AI binding -> available as env.AI
+  "ai": {
+    "binding": "AI"
+  },
+
+  // Sandbox SDK runs inside a container (Durable Object backed).
+  // The Dockerfile MUST extend the cloudflare/sandbox base image whose tag
+  // matches the installed @cloudflare/sandbox npm version (see README).
+  "containers": [
+    {
+      "class_name": "Sandbox",
+      "image": "./Dockerfile",
+      "name": "sandbox",
+      "max_instances": 1,
+      "instance_type": "standard"
+    }
+  ],
+
+  "durable_objects": {
+    "bindings": [
+      {
+        "class_name": "Sandbox",
+        "name": "Sandbox"
+      }
+    ]
+  },
+
+  // Durable Object classes require a migration to be declared once.
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["Sandbox"]
+    }
+  ]
+}

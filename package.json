@@ -1,0 +1,24 @@
+{
+  "name": "nginx-lint-cloudflare-agent",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "Cloudflare Worker agent (Workers AI + Sandbox SDK) that writes & verifies nginx-lint TypeScript plugins",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit",
+    "cf-typegen": "wrangler types"
+  },
+  "dependencies": {
+    "@cloudflare/sandbox": "0.12.1",
+    "ai": "^6.0.0",
+    "workers-ai-provider": "^3.2.1",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260601.0",
+    "typescript": "^5.6.0",
+    "wrangler": "^4.0.0"
+  }
+}
