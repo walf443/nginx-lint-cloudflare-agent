@@ -15,6 +15,7 @@ import { createWorkersAI } from "workers-ai-provider";
 import { z } from "zod";
 import { SYSTEM_PROMPT } from "./prompt.js";
 import { packageJson, TSCONFIG } from "./scaffold.js";
+import { UI_HTML } from "./ui.js";
 import { verifyPlugin, type VerifyResult } from "./verify.js";
 
 // The Sandbox Durable Object class must be re-exported from the entrypoint.
@@ -109,6 +110,12 @@ async function authorPlugin(
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
+    if (request.method === "GET") {
+      return new Response(UI_HTML, {
+        headers: { "content-type": "text/html; charset=utf-8" },
+      });
+    }
+
     if (request.method !== "POST") {
       return new Response(
         "POST { \"rule\": \"<describe the lint rule>\" }\n",
