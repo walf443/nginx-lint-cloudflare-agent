@@ -5,7 +5,7 @@
   "type": "module",
   "description": "Cloudflare Worker agent (Workers AI + Sandbox SDK) that writes & verifies nginx-lint TypeScript plugins",
   "scripts": {
-    "build:harness": "esbuild src/backends/loader-harness.js --bundle --format=esm --platform=neutral '--external:./parser.core.wasm' '--external:./plugin.js' '--external:node:*' --outfile=src/backends/loader-harness.bundle.txt",
+    "build:harness": "node scripts/build-isolate-bundles.mjs",
     "dev": "npm run build:harness && wrangler dev",
     "deploy": "npm run build:harness && wrangler deploy",
     "dev:loader": "npm run build:harness && wrangler dev -c wrangler.loader.jsonc",

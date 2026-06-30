@@ -53,7 +53,7 @@
   // this build uses the sandbox backend) imports the isolate harness as Text
   // and the parser core wasm as Data; these rules let the bundler resolve them.
   "rules": [
-    { "type": "Text", "globs": ["**/*.bundle.txt"] },
-    { "type": "Data", "globs": ["**/parser.core.wasm"] }
+    { "type": "Text", "globs": ["**/*.bundle.txt"], "fallthrough": true },
+    { "type": "Data", "globs": ["**/parser.core.wasm"], "fallthrough": true }
   ]
 }
