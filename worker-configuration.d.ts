@@ -4,8 +4,8 @@ import type { Sandbox } from "@cloudflare/sandbox";
 
 declare global {
   /**
-   * Worker Loader binding (open beta). Shape kept minimal until the loader
-   * backend PoC lands; see src/backends/loader.ts.
+   * Worker Loader binding (open beta) — runs dynamically-provided modules in an
+   * isolate. Minimal shape; see src/backends/loader.ts for usage.
    */
   interface WorkerLoader {
     get(

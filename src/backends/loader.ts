@@ -30,43 +30,100 @@
  * clear message rather than silently misbehaving.
  */
 
+import { transform } from "sucrase";
+import harnessSource from "./loader-harness.bundle.txt";
+import coreWasm from "nginx-lint-plugin/wasm/parser/parser.core.wasm";
 import type {
   CheckConfigsInput,
   CheckConfigsOutput,
+  ConfigCheckResult,
   VerifyBackend,
   VerifyInput,
   VerifyResult,
 } from "./types.js";
 
-const NOT_READY =
-  "loader backend is not implemented yet — the parser runs in workerd via " +
-  "nginx-lint-plugin/testing/custom (see poc/), but the transpile + Worker " +
-  "Loader isolate step is still WIP. Use VERIFY_BACKEND=sandbox for now " +
-  "(see src/backends/loader.ts for the plan).";
+const COMPAT_DATE = "2026-06-28";
 
-function assertLoaderBinding(env: Env): void {
+const COMPILE_NOT_READY =
+  "loader backend's compileAndTest is not implemented yet — the model's " +
+  "node:test-based test file can't run in an isolate. runConfigs (config " +
+  "checking) works; for authoring use VERIFY_BACKEND=sandbox for now.";
+
+function getLoader(env: Env): WorkerLoader {
   if (!("LOADER" in env) || !env.LOADER) {
     throw new Error(
       "no LOADER binding — add `worker_loaders` to your wrangler config " +
         "(see wrangler.loader.jsonc).",
     );
   }
+  return env.LOADER;
+}
+
+/** Strip TypeScript from the generated plugin so it can run as a JS module. */
+function transpilePlugin(pluginTs: string): string {
+  return transform(pluginTs, {
+    transforms: ["typescript"],
+    disableESTransforms: true,
+    production: true,
+  }).code;
 }
 
 async function compileAndTest(
   env: Env,
   _input: VerifyInput,
 ): Promise<VerifyResult> {
-  assertLoaderBinding(env);
-  throw new Error(NOT_READY);
+  getLoader(env);
+  throw new Error(COMPILE_NOT_READY);
 }
 
 async function runConfigs(
   env: Env,
-  _input: CheckConfigsInput,
+  input: CheckConfigsInput,
 ): Promise<CheckConfigsOutput> {
-  assertLoaderBinding(env);
-  return { results: [], error: NOT_READY };
+  const loader = getLoader(env);
+
+  let pluginJs: string;
+  try {
+    pluginJs = transpilePlugin(input.pluginTs);
+  } catch (e) {
+    return { results: [], error: `transpile failed: ${(e as Error).message}` };
+  }
+
+  // Spin up an isolate with the bundled SDK harness, the transpiled plugin, and
+  // the parser core wasm. Network is disabled; only JSON crosses back.
+  const stub = loader.get(`plugin-${input.pluginName}`, () => ({
+    compatibilityDate: COMPAT_DATE,
+    mainModule: "harness.js",
+    modules: {
+      "harness.js": harnessSource,
+      "plugin.js": pluginJs,
+      "parser.core.wasm": { wasm: coreWasm },
+    },
+    globalOutbound: null,
+  }));
+
+  let res: Response;
+  try {
+    res = await stub.getEntrypoint().fetch(
+      new Request("http://isolate/", {
+        method: "POST",
+        body: JSON.stringify({ configs: input.configs }),
+      }),
+    );
+  } catch (e) {
+    return { results: [], error: `isolate failed: ${(e as Error).message}` };
+  }
+
+  if (!res.ok) {
+    return {
+      results: [],
+      raw: (await res.text()).slice(0, 2000),
+      error: `isolate returned ${res.status}`,
+    };
+  }
+
+  const out = (await res.json()) as { results: ConfigCheckResult[] };
+  return { results: out.results };
 }
 
 export const loaderBackend: VerifyBackend = {

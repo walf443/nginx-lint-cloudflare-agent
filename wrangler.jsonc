@@ -47,5 +47,13 @@
       "tag": "v1",
       "new_sqlite_classes": ["Sandbox"]
     }
+  ],
+
+  // src/backends/loader.ts (bundled here via the backend selector even though
+  // this build uses the sandbox backend) imports the isolate harness as Text
+  // and the parser core wasm as Data; these rules let the bundler resolve them.
+  "rules": [
+    { "type": "Text", "globs": ["**/*.bundle.txt"] },
+    { "type": "Data", "globs": ["**/parser.core.wasm"] }
   ]
 }

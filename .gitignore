@@ -3,3 +3,4 @@ dist/
 .wrangler/
 .dev.vars
 *.log
+src/backends/loader-harness.bundle.txt

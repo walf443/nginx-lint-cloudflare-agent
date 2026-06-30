@@ -1,13 +1,14 @@
 {
   // Worker Loader build of the agent — NO container, so it does NOT require the
-  // Workers Paid plan. Verification runs in an isolated Worker via the Worker
-  // Loader API instead of a Sandbox container.
+  // Workers Paid plan. Config verification runs in an isolated Worker via the
+  // Worker Loader API instead of a Sandbox container.
   //
-  //   Deploy:  wrangler deploy -c wrangler.loader.jsonc
-  //   Dev:     wrangler dev    -c wrangler.loader.jsonc
+  //   Dev:     npm run dev:loader      (= build:harness + wrangler dev -c ...)
+  //   Deploy:  npm run deploy:loader
   //
-  // Status: WIP. The loader backend (src/backends/loader.ts) is a skeleton —
-  // the parser-wasm-in-Worker + transpile PoC must land before this is usable.
+  // Status: runConfigs (config checking, used by the UI playground and the
+  // auto-verification corpus) is implemented. compileAndTest (the authoring
+  // tool) is not yet supported here — use the sandbox build for authoring.
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "nginx-lint-cloudflare-agent",
   "main": "src/index.ts",
@@ -27,5 +28,12 @@
     {
       "binding": "LOADER"
     }
+  ],
+
+  // The loader backend imports the bundled isolate harness as Text and the
+  // parser core wasm as raw bytes (Data) to inject into the isolate.
+  "rules": [
+    { "type": "Text", "globs": ["**/*.bundle.txt"] },
+    { "type": "Data", "globs": ["**/parser.core.wasm"] }
   ]
 }
