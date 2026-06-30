@@ -2,21 +2,32 @@
  * Worker Loader verification backend (WIP — container-free, no Paid plan).
  *
  * Instead of a container, this runs the generated plugin inside an isolated
- * Worker via the Worker Loader API (`env.LOADER.get(...)`). The plan:
+ * Worker via the Worker Loader API (`env.LOADER.get(...)`).
  *
- *   1. Transpile the LLM-authored plugin.ts -> plugin.js (strip types) with a
- *      wasm transpiler (esbuild-wasm / @swc/wasm) bundled into the main Worker.
- *   2. Parse each config with the `nginx-lint-plugin` parser wasm IN THE MAIN
- *      (trusted) Worker, producing a plain ParseOutput. The wasm-runs-in-workerd
- *      question is the critical unknown to PoC first (see README/notes).
- *   3. env.LOADER.get(id, () => ({ modules: { 'harness.js', 'plugin.js' }, ... }))
- *      spins up an isolate with network disabled (globalOutbound: null); the
- *      harness rebuilds Config via buildConfigFromParseOutput and calls
- *      plugin.check(), returning LintErrors as JSON over fetch()/RPC.
+ * Parser status: SOLVED. The published `nginx-lint-plugin` (>=0.14.0) exposes a
+ * workerd-friendly entry, `nginx-lint-plugin/testing/custom`:
  *
- * Only the untrusted plugin runs in the isolate; the parser stays in the main
- * Worker. Selecting this backend before the PoC lands fails fast with a clear
- * message rather than silently misbehaving.
+ *   import { createTesting } from "nginx-lint-plugin/testing/custom";
+ *   import coreModule from "nginx-lint-plugin/wasm/parser/parser.core.wasm";
+ *   const { parseConfig, PluginTestRunner } = await createTesting({
+ *     getCoreModule: () => coreModule,
+ *     instantiateCore: (m) => new WebAssembly.Instance(m), // core has no imports
+ *   });
+ *
+ * This parses configs and runs a plugin's check() entirely in-Worker (verified
+ * in poc/). What remains is running the *untrusted* generated plugin safely:
+ *
+ *   1. Transpile the LLM-authored plugin.ts -> JS in-Worker (esbuild-wasm /
+ *      @swc/wasm), since there is no tsc.
+ *   2. env.LOADER.get(id, () => ({ modules: { 'harness.js', 'plugin.js', ... },
+ *      globalOutbound: null })) spins up an isolate with network disabled. The
+ *      harness imports nginx-lint-plugin/testing/custom + the transpiled plugin,
+ *      runs PluginTestRunner.checkString over the configs, and returns LintErrors
+ *      as JSON. The core wasm module is passed in to the isolate.
+ *
+ * Everything that touches the untrusted plugin runs in the isolate; only JSON
+ * crosses back. Selecting this backend before that lands fails fast with a
+ * clear message rather than silently misbehaving.
  */
 
 import type {
@@ -28,8 +39,9 @@ import type {
 } from "./types.js";
 
 const NOT_READY =
-  "loader backend is not implemented yet — the nginx parser wasm + " +
-  "transpile-in-Worker PoC must land first. Use VERIFY_BACKEND=sandbox " +
+  "loader backend is not implemented yet — the parser runs in workerd via " +
+  "nginx-lint-plugin/testing/custom (see poc/), but the transpile + Worker " +
+  "Loader isolate step is still WIP. Use VERIFY_BACKEND=sandbox for now " +
   "(see src/backends/loader.ts for the plan).";
 
 function assertLoaderBinding(env: Env): void {
