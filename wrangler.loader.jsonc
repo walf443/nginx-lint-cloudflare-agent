@@ -1,7 +1,11 @@
 {
-  // Worker Loader build of the agent — NO container, so it does NOT require the
-  // Workers Paid plan. Config verification runs in an isolated Worker via the
-  // Worker Loader API instead of a Sandbox container.
+  // Worker Loader build of the agent — verification runs in an isolated Worker
+  // via the Worker Loader API instead of a Sandbox container (no Docker).
+  //
+  // NOTE: deploying still requires the Workers Paid plan. Worker Loader (Dynamic
+  // Workers) is gated behind Paid just like Containers (API error 10195), so
+  // this build does NOT enable free-tier deploy — it only drops the container.
+  // It runs fully in local `wrangler dev` on any plan.
   //
   //   Dev:     npm run dev:loader      (= build:harness + wrangler dev -c ...)
   //   Deploy:  npm run deploy:loader
