@@ -37,8 +37,20 @@ Rules:
   block.
 - Set \`spec().name\` to the kebab-case rule name and use that SAME string as
   \`LintError.rule\`.
-- Prefer providing an autofix via \`fixes\` (e.g. \`d.replaceWith(...)\`) when a
-  mechanical fix exists; otherwise use an empty \`fixes: []\`.
+- Provide an autofix whenever the rule has a mechanical correction — most rules
+  do. Build it with a Directive method and put it in \`LintError.fixes\`; use
+  \`fixes: []\` only when there is genuinely no safe automatic fix. Choose the
+  builder by the kind of correction:
+    - wrong value       -> \`d.replaceWith("server_tokens off;")\`
+    - missing directive -> \`d.insertAfter("brotli_static on;")\` (or \`insertAfterMany\`)
+    - remove a directive -> \`d.deleteLineFix()\`
+  For example:
+    errors.push({
+      rule: "server-tokens-on", category: "security",
+      message: "server_tokens should be off", severity: "warning",
+      line: d.line(), column: d.column(),
+      fixes: [d.replaceWith("server_tokens off;")],
+    });
 - Always write a test file using the SDK test runner:
 
     import { spec, check } from "./plugin.js";
