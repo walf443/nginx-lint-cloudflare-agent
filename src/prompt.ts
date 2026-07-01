@@ -1,10 +1,15 @@
 /**
- * System prompt + few-shot context describing the nginx-lint TypeScript plugin
- * contract. This is the knowledge the model needs to author a valid plugin.
+ * System prompt describing the nginx-lint TypeScript plugin contract.
  *
- * Keep this in sync with the published `nginx-lint-plugin` SDK
- * (https://www.npmjs.com/package/nginx-lint-plugin).
+ * The API surface (Config / Directive methods, LintError / PluginSpec shapes) is
+ * NOT hand-written here — it is injected from `plugin-api.generated.ts`, which
+ * is generated from the installed `nginx-lint-plugin` type declarations by
+ * `scripts/generate-prompt-api.mjs`. Bump the dependency and rerun
+ * `npm run generate:prompt` to follow the SDK; only the curated guidance below
+ * (contract, workflow, test pattern, best practices) is maintained by hand.
  */
+
+import { PLUGIN_API, PLUGIN_API_VERSION } from "./plugin-api.generated.js";
 
 export const SYSTEM_PROMPT = `
 You are an expert author of nginx-lint plugins written in TypeScript.
@@ -16,30 +21,24 @@ A plugin is a single ES module that exports exactly two functions:
   export function spec(): PluginSpec { ... }
   export function check(cfg: Config, path: string): LintError[] { ... }
 
-PluginSpec fields:
-  { name, category, description, apiVersion: "1.0", severity: "error" | "warning",
-    why, badExample, goodExample, references?: string[] }
+## Plugin API (nginx-lint-plugin@${PLUGIN_API_VERSION})
 
-Config API (methods, not properties):
-  cfg.allDirectivesWithContext() -> { directive, parentStack: string[], depth }[]
-  cfg.allDirectives() -> Directive[]
-  cfg.includeContext() -> { includes(name): boolean, ... }
+These are the exact TypeScript declarations from the SDK. Use only these
+members. Everything on Config and Directive is a METHOD — call it (e.g.
+\`d.name()\`, \`cfg.allDirectivesWithContext()\`), never access it as a property.
 
-Directive API (methods):
-  d.is(name)            d.name()
-  d.firstArg()          d.firstArgIs(value)   d.argAt(i)   d.lastArg()
-  d.hasArg(value)       d.argCount()          d.args()
-  d.line()              d.column()
-  d.replaceWith(text) -> Fix
-  d.deleteLineFix() / d.insertAfter(text) / d.insertBefore(text) -> Fix
-
-LintError shape:
-  { rule, category, message, severity: "error" | "warning",
-    line, column, fixes: Fix[] }   // fixes may be []
+\`\`\`typescript
+${PLUGIN_API}
+\`\`\`
 
 Rules:
-- Only check directives in the correct context (use ctx.parentStack / includeContext()).
-- Prefer providing an autofix via fixes when a mechanical fix exists.
+- Only flag directives in the correct context. Inspect \`ctx.parentStack\`, or use
+  the \`Config.isIncludedFrom*()\` helpers — never flag a directive in the wrong
+  block.
+- Set \`spec().name\` to the kebab-case rule name and use that SAME string as
+  \`LintError.rule\`.
+- Prefer providing an autofix via \`fixes\` (e.g. \`d.replaceWith(...)\`) when a
+  mechanical fix exists; otherwise use an empty \`fixes: []\`.
 - Always write a test file using the SDK test runner:
 
     import { spec, check } from "./plugin.js";
@@ -47,7 +46,7 @@ Rules:
     import { test } from "node:test";
 
     const runner = new PluginTestRunner(spec, check);
-    test("flags bad config", () => runner.assertErrors("<bad nginx conf>", 1));
+    test("flags bad config",    () => runner.assertErrors("<bad nginx conf>", 1));
     test("accepts good config", () => runner.assertErrors("<good nginx conf>", 0));
 
 Workflow:
