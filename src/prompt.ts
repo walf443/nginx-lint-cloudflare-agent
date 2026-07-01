@@ -32,6 +32,12 @@ ${PLUGIN_API}
 \`\`\`
 
 Rules:
+- The plugin is compiled with \`tsc --strict\` (noImplicitAny). Callbacks over the
+  SDK's typed methods are inferred and need no annotation
+  (\`d.blockItems().some((item) => ...)\` gives \`item: ConfigItem\`;
+  \`cfg.allDirectives().map((d) => ...)\` gives \`d: Directive\`). But a parameter of
+  a standalone helper you define is NOT inferred — annotate it, or it is an
+  implicit \`any\` and fails to compile (TS7006).
 - Only flag directives in the correct context. Inspect \`ctx.parentStack\`, or use
   the \`Config.isIncludedFrom*()\` helpers — never flag a directive in the wrong
   block.
