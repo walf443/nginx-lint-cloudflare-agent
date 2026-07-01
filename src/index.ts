@@ -19,7 +19,7 @@ import {
   checkConfigs,
   SAMPLE_CONFIGS,
 } from "./checker.js";
-import { packageJson, TSCONFIG } from "./scaffold.js";
+import { packageJson, pluginProjectPackageJson, TSCONFIG } from "./scaffold.js";
 import { UI_HTML } from "./ui.js";
 import { verifyPlugin, type VerifyResult } from "./verify.js";
 
@@ -179,9 +179,10 @@ async function handleGenerate(request: Request, env: Env): Promise<Response> {
             name: last.pluginName,
             pluginTs: last.pluginTs,
             testTs: last.testTs,
-            // The rest of a runnable project, so the plugin can be verified
-            // locally (`npm install && npm test`) — same scaffold used to verify.
-            packageJson: packageJson(last.pluginName),
+            // A complete, build-ready project so the plugin can be built to a
+            // .wasm component and verified locally: `npm install`, then
+            // `npm run build` (jco componentize) and/or `npm test`.
+            packageJson: pluginProjectPackageJson(last.pluginName),
             tsconfig: TSCONFIG,
           }
         : null,
