@@ -174,6 +174,8 @@ async function run() {
       block("Summary", data.summary) +
       (data.plugin ? block("src/plugin.ts", data.plugin.pluginTs) : "") +
       (data.plugin ? block("src/plugin.test.ts", data.plugin.testTs) : "") +
+      (data.plugin ? block("package.json", data.plugin.packageJson) : "") +
+      (data.plugin ? block("tsconfig.json", data.plugin.tsconfig) : "") +
       block("stdout", r.stdout) +
       block("stderr", r.stderr) +
       block("debug", data.debug ? JSON.stringify(data.debug, null, 2) : "") +

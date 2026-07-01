@@ -7,6 +7,8 @@
  * No `jco componentize` is needed for verification.
  */
 
+import { PLUGIN_API_VERSION } from "./plugin-api.generated.js";
+
 export function packageJson(name: string): string {
   return JSON.stringify(
     {
@@ -17,7 +19,9 @@ export function packageJson(name: string): string {
         test: "tsc && node --test dist/plugin.test.js",
       },
       dependencies: {
-        "nginx-lint-plugin": "latest",
+        // Pin to the same SDK version the system prompt's API was generated
+        // from, so the prompt, verification, and emitted project all agree.
+        "nginx-lint-plugin": PLUGIN_API_VERSION,
       },
       devDependencies: {
         "@types/node": "^22.0.0",

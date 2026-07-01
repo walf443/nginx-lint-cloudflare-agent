@@ -175,7 +175,15 @@ async function handleGenerate(request: Request, env: Env): Promise<Response> {
       summary,
       debug,
       plugin: last
-        ? { name: last.pluginName, pluginTs: last.pluginTs, testTs: last.testTs }
+        ? {
+            name: last.pluginName,
+            pluginTs: last.pluginTs,
+            testTs: last.testTs,
+            // The rest of a runnable project, so the plugin can be verified
+            // locally (`npm install && npm test`) — same scaffold used to verify.
+            packageJson: packageJson(last.pluginName),
+            tsconfig: TSCONFIG,
+          }
         : null,
       result: last?.result ?? null,
       patternChecks,
