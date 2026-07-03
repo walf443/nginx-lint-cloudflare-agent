@@ -12,12 +12,20 @@
     "binding": "AI"
   },
 
-  // Verification backend selector (read as env.VERIFY_BACKEND).
-  // This config wires the container-based backend; for the plan-free Worker
-  // Loader backend deploy with wrangler.loader.jsonc instead.
+  // Default verification backend (env.VERIFY_BACKEND) when a request doesn't
+  // pass a `backend`. Both backends are bound below, so either can be chosen
+  // per request from the UI to compare them.
   "vars": {
     "VERIFY_BACKEND": "sandbox"
   },
+
+  // Worker Loader binding -> env.LOADER (loader backend). Both this and the
+  // Sandbox container require the Workers Paid plan.
+  "worker_loaders": [
+    {
+      "binding": "LOADER"
+    }
+  ],
 
   // Sandbox SDK runs inside a container (Durable Object backed).
   // The Dockerfile MUST extend the cloudflare/sandbox base image whose tag

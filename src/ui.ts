@@ -63,6 +63,9 @@ export const UI_HTML = /* html */ `<!doctype html>
   .check .sev-warning { color: #d97706; }
   .playground { margin-top: 2rem; border-top: 1px solid #8883; padding-top: 1.25rem; display: none; }
   .playground.show { display: block; }
+  .backend-pick { font-size: .9rem; opacity: .85; gap: 1rem; }
+  .backend-pick label { font-weight: 400; display: inline-flex; align-items: center; gap: .3rem; }
+  .timing { font-size: .8rem; opacity: .7; }
 </style>
 </head>
 <body>
@@ -78,6 +81,12 @@ export const UI_HTML = /* html */ `<!doctype html>
     <button data-ex="warn when gzip is not enabled in http">gzip not enabled</button>
     <button data-ex="error when server_tokens is on">server_tokens on</button>
     <button data-ex="warn when ssl_protocols includes TLSv1 or TLSv1.1">weak TLS</button>
+  </div>
+
+  <div class="row backend-pick">
+    <span>Verify with:</span>
+    <label><input type="radio" name="backend" value="sandbox" checked /> sandbox (container)</label>
+    <label><input type="radio" name="backend" value="loader" /> loader (isolate)</label>
   </div>
 
   <div class="row">
@@ -106,6 +115,19 @@ http {
 const $ = (s) => document.querySelector(s);
 const ruleEl = $("#rule");
 const out = $("#output");
+
+// Currently selected verification backend (sandbox | loader).
+const backend = () =>
+  (document.querySelector("input[name=backend]:checked") || {}).value || "sandbox";
+const fmtTiming = (t) => {
+  if (!t) return "";
+  const parts = [];
+  if (t.backend) parts.push(esc(t.backend));
+  if (t.ms != null) parts.push(t.ms + "ms");
+  if (t.verifyMs != null) parts.push("verify " + t.verifyMs + "ms");
+  if (t.patternMs) parts.push("sample " + t.patternMs + "ms");
+  return parts.length ? \` · <span class="timing">\${parts.join(" · ")}</span>\` : "";
+};
 
 document.querySelectorAll(".examples button").forEach((b) => {
   b.addEventListener("click", () => { ruleEl.value = b.dataset.ex; ruleEl.focus(); });
@@ -156,16 +178,17 @@ async function run() {
     const res = await fetch("/", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ rule }),
+      body: JSON.stringify({ rule, backend: backend() }),
     });
     const data = await res.json();
 
     const ok = data.ok;
-    const status = data.error
+    const status = (data.error
       ? \`<span class="fail">⚠ \${esc(data.error)}</span>\`
       : ok
         ? \`<span class="ok">✓ Plugin passed</span> · \${data.attempts} attempt(s)\`
-        : \`<span class="fail">✗ Did not pass</span> · \${data.attempts ?? 0} attempt(s)\`;
+        : \`<span class="fail">✗ Did not pass</span> · \${data.attempts ?? 0} attempt(s)\`)
+      + fmtTiming(data.timing);
 
     const r = data.result || {};
     out.innerHTML =
@@ -212,12 +235,14 @@ async function runCheck() {
         pluginName: lastPlugin.name,
         pluginTs: lastPlugin.pluginTs,
         config,
+        backend: backend(),
       }),
     });
     const data = await res.json();
+    const t = \`<div class="status">Result\${fmtTiming(data.timing)}</div>\`;
     checkout.innerHTML = data.ok
-      ? renderChecks(data.results, "Result")
-      : \`<div class="status fail">\${esc(data.error || "check failed")}</div>\` +
+      ? t + renderChecks(data.results, "Result")
+      : t + \`<div class="status fail">\${esc(data.error || "check failed")}</div>\` +
         block("output", data.raw);
   } catch (e) {
     checkout.innerHTML = \`<div class="status fail">Request failed: \${esc(e.message)}</div>\`;

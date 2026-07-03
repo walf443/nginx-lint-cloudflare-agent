@@ -21,7 +21,7 @@ declare global {
     VERIFY_BACKEND?: "sandbox" | "loader" | "" | undefined;
     /** Sandbox container Durable Object namespace (sandbox backend only). */
     Sandbox: DurableObjectNamespace<Sandbox>;
-    /** Worker Loader binding (loader backend only; see wrangler.loader.jsonc). */
+    /** Worker Loader binding (loader backend only; see wrangler.jsonc). */
     LOADER?: WorkerLoader;
   }
 }

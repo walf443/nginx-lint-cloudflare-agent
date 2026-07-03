@@ -1,28 +1,35 @@
 /**
- * Backend selection. Controlled by the `VERIFY_BACKEND` var in wrangler config:
+ * Backend selection. Both backends are bound in wrangler.jsonc (containers +
+ * worker_loaders), so either can be chosen per request — pass `backend` in the
+ * request body to compare them. When a request omits it, the `VERIFY_BACKEND`
+ * var is the default.
  *
- *   "sandbox" (default) -> container-based, requires the Workers Paid plan.
- *   "loader"            -> Worker Loader isolate, no container (WIP).
+ *   "sandbox" -> container-based (Cloudflare Sandbox).
+ *   "loader"  -> Worker Loader isolate, no container.
  *
- * Switch by deploying a different config (see wrangler.jsonc vs
- * wrangler.loader.jsonc) — the binding set differs per backend, so the toggle
- * lives in the build/config, not just at runtime.
+ * Both require the Workers Paid plan to deploy.
  */
 
 import { loaderBackend } from "./loader.js";
 import { sandboxBackend } from "./sandbox.js";
 import type { VerifyBackend } from "./types.js";
 
-export function getBackend(env: Env): VerifyBackend {
-  switch (env.VERIFY_BACKEND) {
+export const BACKENDS = ["sandbox", "loader"] as const;
+export type BackendName = (typeof BACKENDS)[number];
+
+/**
+ * Pick a backend by explicit `choice` (per request), falling back to the
+ * `VERIFY_BACKEND` var, then to "sandbox".
+ */
+export function getBackend(env: Env, choice?: string): VerifyBackend {
+  const name = choice || env.VERIFY_BACKEND || "sandbox";
+  switch (name) {
     case "loader":
       return loaderBackend;
     case "sandbox":
-    case undefined:
-    case "":
       return sandboxBackend;
     default:
-      throw new Error(`unknown VERIFY_BACKEND: ${env.VERIFY_BACKEND}`);
+      throw new Error(`unknown backend: ${name} (expected sandbox|loader)`);
   }
 }
 

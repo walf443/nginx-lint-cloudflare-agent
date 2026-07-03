@@ -1,5 +1,5 @@
 // Module shapes for the non-JS assets the loader backend imports, matched to
-// the wrangler module rules in wrangler.loader.jsonc:
+// the wrangler module rules in wrangler.jsonc:
 //   - the esbuild-bundled harness, loaded as Text (a string)
 //   - the parser core wasm, loaded as Data (an ArrayBuffer)
 

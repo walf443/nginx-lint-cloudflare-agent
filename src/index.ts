@@ -41,17 +41,21 @@ interface SubmittedPlugin {
 async function authorPlugin(
   rule: string,
   env: Env,
+  backendChoice?: string,
 ): Promise<{
   summary: string;
   attempts: number;
   last: SubmittedPlugin | null;
   debug: unknown;
+  backend: string;
+  verifyMs: number;
 }> {
   const workersai = createWorkersAI({ binding: env.AI });
-  const backend = getBackend(env);
+  const backend = getBackend(env, backendChoice);
 
   let attempts = 0;
   let last: SubmittedPlugin | null = null;
+  let verifyMs = 0; // total time spent in the backend's compileAndTest
 
   const result = await generateText({
     model: workersai(MODEL),
@@ -77,6 +81,7 @@ async function authorPlugin(
         }),
         execute: async ({ pluginName, pluginTs, testTs }) => {
           attempts++;
+          const t0 = Date.now();
           const res = await backend.compileAndTest(env, {
             pluginName,
             pluginTs,
@@ -84,6 +89,7 @@ async function authorPlugin(
             packageJson: packageJson(pluginName),
             tsconfig: TSCONFIG,
           });
+          verifyMs += Date.now() - t0;
           last = { pluginName, pluginTs, testTs, result: res };
 
           if (res.success) {
@@ -108,7 +114,7 @@ async function authorPlugin(
   };
   console.log("authorPlugin result:", JSON.stringify(debug, null, 2));
 
-  return { summary: result.text, attempts, last, debug };
+  return { summary: result.text, attempts, last, debug, backend: backend.name, verifyMs };
 }
 
 export default {
@@ -136,10 +142,12 @@ export default {
 // of sample configs so the response shows how it behaves on real configs.
 async function handleGenerate(request: Request, env: Env): Promise<Response> {
   let rule: string;
+  let backendChoice: string | undefined;
   try {
-    const body = (await request.json()) as { rule?: string };
+    const body = (await request.json()) as { rule?: string; backend?: string };
     if (!body.rule) throw new Error("missing 'rule'");
     rule = body.rule;
+    backendChoice = body.backend;
   } catch (e) {
     return Response.json(
       { ok: false, error: `bad request: ${(e as Error).message}` },
@@ -148,17 +156,21 @@ async function handleGenerate(request: Request, env: Env): Promise<Response> {
   }
 
   try {
-    const { summary, attempts, last, debug } = await authorPlugin(rule, env);
+    const { summary, attempts, last, debug, backend, verifyMs } =
+      await authorPlugin(rule, env, backendChoice);
 
     // Behavior smoke test against the built-in corpus (best-effort).
     let patternChecks = null;
+    let patternMs = 0;
     if (last) {
       try {
-        const checked = await getBackend(env).runConfigs(env, {
+        const p0 = Date.now();
+        const checked = await getBackend(env, backendChoice).runConfigs(env, {
           pluginName: last.pluginName,
           pluginTs: last.pluginTs,
           configs: SAMPLE_CONFIGS,
         });
+        patternMs = Date.now() - p0;
         patternChecks = checked.error
           ? { error: checked.error, raw: checked.raw }
           : checked.results;
@@ -172,6 +184,7 @@ async function handleGenerate(request: Request, env: Env): Promise<Response> {
       attempts,
       summary,
       debug,
+      timing: { backend, verifyMs, patternMs },
       plugin: last
         ? {
             name: last.pluginName,
@@ -202,12 +215,14 @@ async function handleCheck(request: Request, env: Env): Promise<Response> {
   let pluginName: string;
   let pluginTs: string;
   let configs: ConfigSample[];
+  let backendChoice: string | undefined;
   try {
     const body = (await request.json()) as {
       pluginName?: string;
       pluginTs?: string;
       config?: string;
       configs?: ConfigSample[];
+      backend?: string;
     };
     if (!body.pluginName || !body.pluginTs) {
       throw new Error("missing 'pluginName' or 'pluginTs'");
@@ -219,6 +234,7 @@ async function handleCheck(request: Request, env: Env): Promise<Response> {
     if (configs.length === 0) throw new Error("missing 'config' or 'configs'");
     pluginName = body.pluginName;
     pluginTs = body.pluginTs;
+    backendChoice = body.backend;
   } catch (e) {
     return Response.json(
       { ok: false, error: `bad request: ${(e as Error).message}` },
@@ -227,15 +243,18 @@ async function handleCheck(request: Request, env: Env): Promise<Response> {
   }
 
   try {
-    const checked = await getBackend(env).runConfigs(env, {
+    const backend = getBackend(env, backendChoice);
+    const t0 = Date.now();
+    const checked = await backend.runConfigs(env, {
       pluginName,
       pluginTs,
       configs,
     });
+    const timing = { backend: backend.name, ms: Date.now() - t0 };
     return Response.json(
       checked.error
-        ? { ok: false, error: checked.error, raw: checked.raw }
-        : { ok: true, results: checked.results },
+        ? { ok: false, error: checked.error, raw: checked.raw, timing }
+        : { ok: true, results: checked.results, timing },
       { status: checked.error ? 500 : 200 },
     );
   } catch (e) {
