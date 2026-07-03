@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "description": "Cloudflare Worker agent (Workers AI + Sandbox SDK) that writes & verifies nginx-lint TypeScript plugins",
+  "license": "MIT",
   "scripts": {
     "generate:prompt": "node scripts/generate-prompt-api.mjs",
     "dev": "npm run generate:prompt && wrangler dev",
