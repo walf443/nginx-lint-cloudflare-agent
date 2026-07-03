@@ -3,3 +3,5 @@ dist/
 .wrangler/
 .dev.vars
 *.log
+src/backends/loader-harness.bundle.txt
+src/backends/loader-testing.bundle.txt

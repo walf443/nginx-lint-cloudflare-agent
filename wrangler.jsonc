@@ -12,6 +12,13 @@
     "binding": "AI"
   },
 
+  // Verification backend selector (read as env.VERIFY_BACKEND).
+  // This config wires the container-based backend; for the plan-free Worker
+  // Loader backend deploy with wrangler.loader.jsonc instead.
+  "vars": {
+    "VERIFY_BACKEND": "sandbox"
+  },
+
   // Sandbox SDK runs inside a container (Durable Object backed).
   // The Dockerfile MUST extend the cloudflare/sandbox base image whose tag
   // matches the installed @cloudflare/sandbox npm version (see README).
@@ -40,5 +47,13 @@
       "tag": "v1",
       "new_sqlite_classes": ["Sandbox"]
     }
+  ],
+
+  // src/backends/loader.ts (bundled here via the backend selector even though
+  // this build uses the sandbox backend) imports the isolate harness as Text
+  // and the parser core wasm as Data; these rules let the bundler resolve them.
+  "rules": [
+    { "type": "Text", "globs": ["**/*.bundle.txt"], "fallthrough": true },
+    { "type": "Data", "globs": ["**/parser.core.wasm"], "fallthrough": true }
   ]
 }

@@ -1,0 +1,43 @@
+{
+  // Worker Loader build of the agent — verification runs in an isolated Worker
+  // via the Worker Loader API instead of a Sandbox container (no Docker).
+  //
+  // NOTE: deploying still requires the Workers Paid plan. Worker Loader (Dynamic
+  // Workers) is gated behind Paid just like Containers (API error 10195), so
+  // this build does NOT enable free-tier deploy — it only drops the container.
+  // It runs fully in local `wrangler dev` on any plan.
+  //
+  //   Dev:     npm run dev:loader      (= build:harness + wrangler dev -c ...)
+  //   Deploy:  npm run deploy:loader
+  //
+  // Both verification methods are implemented on this backend (no container):
+  // runConfigs (UI playground + auto-verification corpus) and compileAndTest
+  // (the authoring build_and_test tool, run in an isolate with node:test shims).
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "nginx-lint-cloudflare-agent",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-06-28",
+  "compatibility_flags": ["nodejs_compat"],
+
+  "ai": {
+    "binding": "AI"
+  },
+
+  "vars": {
+    "VERIFY_BACKEND": "loader"
+  },
+
+  // Worker Loader binding -> available as env.LOADER (open beta).
+  "worker_loaders": [
+    {
+      "binding": "LOADER"
+    }
+  ],
+
+  // The loader backend imports the bundled isolate harness as Text and the
+  // parser core wasm as raw bytes (Data) to inject into the isolate.
+  "rules": [
+    { "type": "Text", "globs": ["**/*.bundle.txt"], "fallthrough": true },
+    { "type": "Data", "globs": ["**/parser.core.wasm"], "fallthrough": true }
+  ]
+}

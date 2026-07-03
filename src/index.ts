@@ -13,15 +13,12 @@
 import { generateText, stepCountIs, tool } from "ai";
 import { createWorkersAI } from "workers-ai-provider";
 import { z } from "zod";
+import { getBackend } from "./backends/index.js";
+import type { ConfigSample, VerifyResult } from "./backends/types.js";
 import { SYSTEM_PROMPT } from "./prompt.js";
-import {
-  type ConfigSample,
-  checkConfigs,
-  SAMPLE_CONFIGS,
-} from "./checker.js";
+import { SAMPLE_CONFIGS } from "./sample-configs.js";
 import { packageJson, pluginProjectPackageJson, TSCONFIG } from "./scaffold.js";
 import { UI_HTML } from "./ui.js";
-import { verifyPlugin, type VerifyResult } from "./verify.js";
 
 // The Sandbox Durable Object class must be re-exported from the entrypoint.
 export { Sandbox } from "@cloudflare/sandbox";
@@ -51,6 +48,7 @@ async function authorPlugin(
   debug: unknown;
 }> {
   const workersai = createWorkersAI({ binding: env.AI });
+  const backend = getBackend(env);
 
   let attempts = 0;
   let last: SubmittedPlugin | null = null;
@@ -79,7 +77,7 @@ async function authorPlugin(
         }),
         execute: async ({ pluginName, pluginTs, testTs }) => {
           attempts++;
-          const res = await verifyPlugin(env, {
+          const res = await backend.compileAndTest(env, {
             pluginName,
             pluginTs,
             testTs,
@@ -156,7 +154,7 @@ async function handleGenerate(request: Request, env: Env): Promise<Response> {
     let patternChecks = null;
     if (last) {
       try {
-        const checked = await checkConfigs(env, {
+        const checked = await getBackend(env).runConfigs(env, {
           pluginName: last.pluginName,
           pluginTs: last.pluginTs,
           configs: SAMPLE_CONFIGS,
@@ -229,7 +227,11 @@ async function handleCheck(request: Request, env: Env): Promise<Response> {
   }
 
   try {
-    const checked = await checkConfigs(env, { pluginName, pluginTs, configs });
+    const checked = await getBackend(env).runConfigs(env, {
+      pluginName,
+      pluginTs,
+      configs,
+    });
     return Response.json(
       checked.error
         ? { ok: false, error: checked.error, raw: checked.raw }
