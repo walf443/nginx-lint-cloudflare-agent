@@ -25,7 +25,7 @@ export function packageJson(name: string): string {
       },
       devDependencies: {
         "@types/node": "^22.0.0",
-        typescript: "^5.6.0",
+        typescript: "^7.0.0",
       },
     },
     null,
@@ -71,7 +71,7 @@ export function pluginProjectPackageJson(name: string): string {
         "@bytecodealliance/jco": "^1",
         "@types/node": "^22.0.0",
         esbuild: "^0.28.1",
-        typescript: "^5.6.0",
+        typescript: "^7.0.0",
       },
     },
     null,
@@ -89,6 +89,11 @@ export function pluginProjectPackageJson(name: string): string {
  * Promise.withResolvers); every runtime a plugin lands in — the sandbox's Node,
  * workerd, and the SpiderMonkey that `jco componentize` bakes into the .wasm —
  * has had those since well before the toolchain versions pinned above.
+ *
+ * `types` must stay explicit: TypeScript 7 dropped the implicit pickup of every
+ * @types/* package in node_modules, so without it the model's test file fails to
+ * compile on `import { test } from "node:test"` — no @types/node version fixes
+ * that. Upstream's own TS plugin lists it for the same reason.
  */
 export const TSCONFIG = JSON.stringify(
   {
@@ -98,6 +103,7 @@ export const TSCONFIG = JSON.stringify(
       moduleResolution: "nodenext",
       outDir: "dist",
       rootDir: "src",
+      types: ["node"],
       strict: true,
       skipLibCheck: true,
     },
