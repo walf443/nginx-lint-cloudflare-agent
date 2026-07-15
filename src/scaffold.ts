@@ -79,10 +79,21 @@ export function pluginProjectPackageJson(name: string): string {
   );
 }
 
+/**
+ * tsconfig for both the in-sandbox verification project and the emitted one.
+ *
+ * `target` picks the default `lib` here rather than any downleveling — tsc emits
+ * byte-identical JS for plugin code at es2022 and es2024, since neither ES2023
+ * nor ES2024 added syntax tsc transforms. es2024 is really about letting the
+ * model use the newer built-ins (findLast/toSorted, Object.groupBy,
+ * Promise.withResolvers); every runtime a plugin lands in — the sandbox's Node,
+ * workerd, and the SpiderMonkey that `jco componentize` bakes into the .wasm —
+ * has had those since well before the toolchain versions pinned above.
+ */
 export const TSCONFIG = JSON.stringify(
   {
     compilerOptions: {
-      target: "es2022",
+      target: "es2024",
       module: "nodenext",
       moduleResolution: "nodenext",
       outDir: "dist",
