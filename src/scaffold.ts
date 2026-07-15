@@ -40,6 +40,12 @@ export function packageJson(name: string): string {
  * plugin setup in the nginx-lint-plugin README; it is heavier than the lean
  * `packageJson` above (which is used only for in-sandbox verification, where the
  * componentize toolchain isn't needed).
+ *
+ * The build bundles before componentizing. Plugins import `buildConfigFromSnapshot`
+ * from the SDK at runtime, and `jco componentize`'s bundler (StarlingMonkey/wizer)
+ * resolves no module specifier at all — it needs one self-contained file, so the
+ * raw per-file tsc output would fail with "No such file or directory" even though
+ * tsc and node resolve the same import fine. esbuild flattens it away first.
  */
 export function pluginProjectPackageJson(name: string): string {
   return JSON.stringify(
@@ -49,18 +55,22 @@ export function pluginProjectPackageJson(name: string): string {
       type: "module",
       scripts: {
         build:
-          "tsc && jco componentize dist/plugin.js " +
+          "tsc && npm run bundle && jco componentize dist/plugin.bundle.js " +
           "-w node_modules/nginx-lint-plugin/wit -n plugin --disable all " +
           `-o dist/${name}.wasm`,
+        bundle:
+          "esbuild dist/plugin.js --bundle --format=esm --platform=neutral " +
+          "--outfile=dist/plugin.bundle.js",
         test: "tsc && node --test dist/plugin.test.js",
       },
       dependencies: {
         "nginx-lint-plugin": PLUGIN_API_VERSION,
       },
       devDependencies: {
-        "@bytecodealliance/componentize-js": "^0.19",
+        "@bytecodealliance/componentize-js": "^0.21.0",
         "@bytecodealliance/jco": "^1",
         "@types/node": "^22.0.0",
+        esbuild: "^0.28.1",
         typescript: "^5.6.0",
       },
     },

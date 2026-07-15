@@ -5,3 +5,4 @@ dist/
 *.log
 src/backends/loader-harness.bundle.txt
 src/backends/loader-testing.bundle.txt
+src/backends/loader-sdk.bundle.txt
